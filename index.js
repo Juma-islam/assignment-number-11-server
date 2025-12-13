@@ -38,7 +38,6 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 
-// const YOUR_DOMAIN = 'http://localhost:4242';
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.ecxm2rv.mongodb.net/?appName=Cluster0`;
 
@@ -71,7 +70,7 @@ async function run() {
       res.send(result);
     });
 
-    //  git korinai
+  
     app.post("/products", verifyFBToken, async (req, res) => {
       const newProduct = req.body;
       newProduct.showOnHomePage = false;
