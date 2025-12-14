@@ -144,6 +144,16 @@ async function run() {
             res.send(result)
         })
 
+        app.get('/products', async (req, res) => {
+            const { limit = 0, skip = 0, email } = req.query
+            const query = {}
+            if (email) {
+                query.sellerEmail = email
+            }
+            const cursor = productsCollection.find(query).limit(Number(limit)).skip(Number(skip))
+            const result = await cursor.toArray()
+            res.send(result)
+        })
         // ---------------
 
         app.get('/products/:id', async (req, res) => {
@@ -163,10 +173,7 @@ async function run() {
         });
 
 
-        app.get('/productsCount', async (req, res) => {
-            const count = await productsCollection.estimatedDocumentCount();
-            res.send({ count });
-        });
+    //  ------------
 
         app.delete('/products/:id', verifyFBToken, async (req, res) => {
             const id = req.params.id
