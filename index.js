@@ -220,7 +220,7 @@ async function run() {
       const result = await cursor.toArray();
       res.send(result);
     });
-// ------------
+
     app.post("/users", async (req, res) => {
       const user = req.body;
       user.joinDate = new Date();
@@ -234,26 +234,8 @@ async function run() {
       const result = await usersCollection.insertOne(user);
       res.send(result);
     });
-
-    app.patch("/users/:id", verifyFBToken, async (req, res) => {
-      const user = await usersCollection.findOne({ email: req.decoded_email });
-
-      if (user?.role !== "admin") {
-        return res.status(403).send({ message: "Forbidden: Only admin can approve users" });
-      }
-
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const updateDoc = {
-        $set: {
-          status: "approved",
-          updatedAt: new Date(),
-        },
-      };
-
-      const result = await usersCollection.updateOne(query, updateDoc);
-      res.send(result);
-    });
+// ------------
+    
 
     app.patch("/users/:id/role", verifyFBToken, async (req, res) => {
       const adminUser = await usersCollection.findOne({ email: req.decoded_email });
