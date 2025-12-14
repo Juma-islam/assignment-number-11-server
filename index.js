@@ -235,7 +235,25 @@ async function run() {
       res.send(result);
     });
 // ------------
-    
+    app.patch("/users/:id", verifyFBToken, async (req, res) => {
+      const user = await usersCollection.findOne({ email: req.decoded_email });
+
+      if (user?.role !== "admin") {
+        return res.status(403).send({ message: "Forbidden: Only admin can approve users" });
+      }
+
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: {
+          status: "approved",
+          updatedAt: new Date(),
+        },
+      };
+
+      const result = await usersCollection.updateOne(query, updateDoc);
+      res.send(result);
+    });
 
     app.patch("/users/:id/role", verifyFBToken, async (req, res) => {
       const adminUser = await usersCollection.findOne({ email: req.decoded_email });
@@ -257,22 +275,7 @@ async function run() {
       res.send(result);
     });
 
-    app.patch("/users/:id/suspension", async (req, res) => {
-      const id = req.params.id;
-      const { status, suspendReason } = req.body;
-
-      const query = { _id: new ObjectId(id) };
-      const updatedDoc = {
-        $set: {
-          status,
-          suspendReason,
-          updatedAt: new Date(),
-        },
-      };
-
-      const result = await usersCollection.updateOne(query, updatedDoc);
-      res.send(result);
-    });
+   
 
     // Orders related APIs
 
