@@ -154,7 +154,6 @@ async function run() {
             const result = await cursor.toArray()
             res.send(result)
         })
-        // ---------------
 
         app.get('/products/:id', async (req, res) => {
             const id = req.params.id;
@@ -173,7 +172,12 @@ async function run() {
         });
 
 
-    //  ------------
+   
+       app.get('/productsCount', async (req, res) => {
+            const count = await productsCollection.estimatedDocumentCount();
+            res.send({ count });
+        });
+
 
         app.delete('/products/:id', verifyFBToken, async (req, res) => {
             const id = req.params.id
@@ -202,28 +206,10 @@ async function run() {
         })
 
 
-
+// ------------
         // Users Apis 
 
-        app.get('/users', verifyFBToken, async (req, res) => {
-            const user = await usersCollection.findOne({ email: req.decoded_email })
-            if (user?.role !== 'admin') {
-                const currentUser = await usersCollection.findOne({ email: req.decoded_email });
-                return res.send(currentUser);
-            }
-            const email = req.query.email
-            const query = {}
-            if (email) {
-                query.email = email
-                const result = await usersCollection.findOne(query)
-
-                return res.send(result)
-            }
-            const cursor = usersCollection.find()
-            const result = await cursor.toArray()
-            res.send(result)
-
-        })
+       
 
         app.post('/users', async (req, res) => {
             const user = req.body
