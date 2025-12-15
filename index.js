@@ -311,7 +311,8 @@ async function run() {
       const result = await curson.toArray();
       res.send(result);
     });
-// ----------------
+
+
     app.get("/orders/:orderId", async (req, res) => {
       const id = req.params.orderId;
       const query = { _id: new ObjectId(id) };
@@ -337,20 +338,115 @@ async function run() {
 
       res.send({ insertedId: result.insertedId });
     });
+// --------------
+    app.patch("/orders/:id", async (req, res) => {
+      const id = req.params.id;
+      const { status, location, note } = req.body;
 
-    
+      const query = { _id: new ObjectId(id) };
 
-    app.delete("/orders/:id/my-order", async (req, res) => {
-      const orderId = req.params.id;
-      const query = { _id: new ObjectId(orderId) };
-      const result = await ordersCollection.deleteOne(query);
+      const generateTrackingId = () => {
+        const trackingBase = uuidv4().split("-")[0];
+        return `TDO-${trackingBase.toUpperCase()}`;
+      };
 
-      if (result.deletedCount > 0) {
-        return res.send({ success: true, message: "Pending order deleted" });
+      const newTrackingEntry = {
+        entryDate: new Date(),
+        orderStatus: status,
+        location: location || "",
+        note: note || "",
+      };
+
+      if (status === "Delivered") {
+        const updatedDoc = {
+          $push: { trackingHistory: newTrackingEntry },
+          $set: {
+            status: status,
+            updatedAt: new Date(),
+          },
+        };
+        const result = await ordersCollection.updateOne(query, updatedDoc);
+        return res.send(result);
       }
 
-      res.send({ success: false, message: "Order not found or cannot delete" });
+      if (status === "Approved") {
+        const order = await ordersCollection.findOne(query);
+
+        if (!order) {
+          return res.status(404).send({ message: "Order not found" });
+        }
+
+        const productQuery = {
+          $or: [{ _id: order.productId }, { _id: new ObjectId(order.productId) }],
+        };
+
+        const product = await productsCollection.findOne(productQuery);
+
+        if (!product) {
+          return res.status(404).send({ message: "Product not found" });
+        }
+
+        const orderQuantity = parseInt(order.quantity);
+        const currentAvailableQuantity = parseInt(product.availableQuantity);
+
+        if (currentAvailableQuantity < orderQuantity) {
+          return res.status(400).send({
+            message: `Insufficient stock. Available: ${currentAvailableQuantity}, Ordered: ${orderQuantity}`,
+          });
+        }
+
+        const newAvailableQuantity = currentAvailableQuantity - orderQuantity;
+
+        const productUpdateResult = await productsCollection.updateOne(productQuery, {
+          $set: {
+            availableQuantity: newAvailableQuantity,
+            updatedAt: new Date(),
+          },
+        });
+
+        const orderUpdatedDoc = {
+          $push: { trackingHistory: newTrackingEntry },
+          $set: {
+            status: status,
+            updatedAt: new Date(),
+            trackingId: generateTrackingId(),
+          },
+        };
+
+        const orderUpdateResult = await ordersCollection.updateOne(query, orderUpdatedDoc);
+
+        res.send({
+          ...orderUpdateResult,
+          productUpdated: productUpdateResult.modifiedCount > 0,
+        });
+      }
+
+      if (status === "Rejected") {
+        const updatedDoc = {
+          $push: { trackingHistory: newTrackingEntry },
+          $set: {
+            status: status,
+            updatedAt: new Date(),
+            trackingId: null,
+          },
+        };
+
+        const result = await ordersCollection.updateOne(query, updatedDoc);
+        return res.send(result);
+      }
+
+      const updatedDoc = {
+        $push: { trackingHistory: newTrackingEntry },
+        $set: {
+          updatedAt: new Date(),
+        },
+      };
+
+      const result = await ordersCollection.updateOne(query, updatedDoc);
+      res.send(result);
     });
+
+   
 
     app.delete("/orders/:id", async (req, res) => {
       const orderId = req.params.id;
