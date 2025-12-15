@@ -294,14 +294,25 @@ async function run() {
 
     // Orders related APIs
 // ----------------
-  
-
-    app.get("/orders/:orderId", async (req, res) => {
-      const id = req.params.orderId;
-      const query = { _id: new ObjectId(id) };
-      const result = await ordersCollection.findOne(query);
+    app.get("/orders", verifyFBToken, async (req, res) => {
+      const sellerEmail = req.query.sellerEmail;
+      const email = req.query.email;
+      const query = {};
+      if (email) {
+        query.buyerEmail = email;
+        if (email !== req?.decoded_email) {
+          return res.status(403).send({ message: "forbidden access!" });
+        }
+      }
+      if (sellerEmail) {
+        query.sellerEmail = sellerEmail;
+      }
+      const curson = ordersCollection.find(query);
+      const result = await curson.toArray();
       res.send(result);
     });
+
+    
 
     app.post("/orders", async (req, res) => {
       const order = req.body;
