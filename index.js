@@ -446,7 +446,6 @@ async function run() {
       res.send(result);
     });
 
-   // --------
     app.delete("/orders/:id/my-order", async (req, res) => {
       const orderId = req.params.id;
       const query = { _id: new ObjectId(orderId) };
@@ -479,34 +478,40 @@ async function run() {
         res.status(500).send({ success: false, message: "Server error" });
       }
     });
-
+//---------
     // Payment related APIs
+    app.post("/create-checkout-session", async (req, res) => {
+      const paymentInfo = req.body;
+      const quantity = parseInt(paymentInfo.quantity);
+      const amount = paymentInfo.productPrice * 100;
 
- 
-
-    app.get("/verify-payment", async (req, res) => {
-      const sessionId = req.query.session_id;
-
-      const session = await stripe.checkout.sessions.retrieve(sessionId);
-
-      const orderId = session.metadata.orderId;
-
-      if (session.payment_status === "paid") {
-        await ordersCollection.updateOne(
-          { _id: new ObjectId(orderId) },
+      const session = await stripe.checkout.sessions.create({
+        line_items: [
           {
-            $set: {
-              paymentStatus: "Paid",
-              transactionId: session.payment_intent,
+            price_data: {
+              currency: "usd",
+              unit_amount: amount,
+              product_data: {
+                name: paymentInfo.productTitle,
+              },
             },
-          }
-        );
+            quantity: quantity,
+          },
+        ],
+        customer_email: paymentInfo?.buyerEmail,
+        mode: "payment",
+        metadata: {
+          productId: paymentInfo.productId,
+          orderId: paymentInfo.orderId,
+        },
+        success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled?session_id={CHECKOUT_SESSION_ID}&orderId=${paymentInfo.orderId}`,
+      });
 
-        return res.send({ success: true });
-      }
-
-      res.send({ success: false });
+      res.send({ url: session.url });
     });
+
+    
 
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
