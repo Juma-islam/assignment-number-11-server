@@ -478,7 +478,7 @@ async function run() {
         res.status(500).send({ success: false, message: "Server error" });
       }
     });
-//---------
+
     // Payment related APIs
     app.post("/create-checkout-session", async (req, res) => {
       const paymentInfo = req.body;
@@ -511,7 +511,29 @@ async function run() {
       res.send({ url: session.url });
     });
 
-    
+    app.get("/verify-payment", async (req, res) => {
+      const sessionId = req.query.session_id;
+
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+      const orderId = session.metadata.orderId;
+
+      if (session.payment_status === "paid") {
+        await ordersCollection.updateOne(
+          { _id: new ObjectId(orderId) },
+          {
+            $set: {
+              paymentStatus: "Paid",
+              transactionId: session.payment_intent,
+            },
+          }
+        );
+
+        return res.send({ success: true });
+      }
+
+      res.send({ success: false });
+    });
 
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
