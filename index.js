@@ -234,7 +234,7 @@ async function run() {
       const result = await usersCollection.insertOne(user);
       res.send(result);
     });
-// ------------
+
     app.patch("/users/:id", verifyFBToken, async (req, res) => {
       const user = await usersCollection.findOne({ email: req.decoded_email });
 
@@ -275,27 +275,26 @@ async function run() {
       res.send(result);
     });
 
-   
+    app.patch("/users/:id/suspension", async (req, res) => {
+      const id = req.params.id;
+      const { status, suspendReason } = req.body;
 
-    // Orders related APIs
+      const query = { _id: new ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          status,
+          suspendReason,
+          updatedAt: new Date(),
+        },
+      };
 
-    app.get("/orders", verifyFBToken, async (req, res) => {
-      const sellerEmail = req.query.sellerEmail;
-      const email = req.query.email;
-      const query = {};
-      if (email) {
-        query.buyerEmail = email;
-        if (email !== req?.decoded_email) {
-          return res.status(403).send({ message: "forbidden access!" });
-        }
-      }
-      if (sellerEmail) {
-        query.sellerEmail = sellerEmail;
-      }
-      const curson = ordersCollection.find(query);
-      const result = await curson.toArray();
+      const result = await usersCollection.updateOne(query, updatedDoc);
       res.send(result);
     });
+
+    // Orders related APIs
+// ----------------
+  
 
     app.get("/orders/:orderId", async (req, res) => {
       const id = req.params.orderId;
