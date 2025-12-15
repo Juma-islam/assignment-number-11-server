@@ -17,7 +17,6 @@ const verifyFBToken = async (req, res, next) => {
   if (!token) {
     return res.status(401).send({ message: "unauthorized access!" });
   }
-
   try {
     const idToken = token.split(" ")[1];
     const decoded = await admin.auth().verifyIdToken(idToken);
@@ -96,14 +95,14 @@ async function run() {
       }
 
       const {
-        productName,
+        title,
         category,
         price,
         productDescription,
         demoVideoLink,
         availableQuantity,
         minimumOrderQuantity,
-        paymentOption,
+        paymentOptions,
         images,
       } = updatedProduct;
 
@@ -113,12 +112,12 @@ async function run() {
 
       const updatedDoc = {
         $set: {
-          productName,
+          title,
           category,
           price,
           availableQuantity,
           minimumOrderQuantity,
-          paymentOption,
+          paymentOptions,
           productDescription,
           demoVideoLink,
           images: images || [],
@@ -480,36 +479,82 @@ async function run() {
     });
 
     // Payment related APIs
+    // app.post("/create-checkout-session", async (req, res) => {
+    //   const paymentInfo = req.body;
+    //   const quantity = parseInt(paymentInfo.quantity);
+    //   const amount = paymentInfo.productPrice * 100;
+
+    //   const session = await stripe.checkout.sessions.create({
+    //     line_items: [
+    //       {
+    //         price_data: {
+    //           currency: "usd",
+    //           unit_amount: amount,
+    //           product_data: {
+    //             name: paymentInfo.productTitle,
+    //           },
+    //         },
+    //         quantity: quantity,
+    //       },
+    //     ],
+    //     customer_email: paymentInfo?.buyerEmail,
+    //     mode: "payment",
+    //     metadata: {
+    //       productId: paymentInfo.productId,
+    //       orderId: paymentInfo.orderId,
+    //     },
+    //     success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+    //     cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled?session_id={CHECKOUT_SESSION_ID}&orderId=${paymentInfo.orderId}`,
+    //   });
+
+    //   res.send({ url: session.url });
+    // });
+
+
+    //-----------------
     app.post("/create-checkout-session", async (req, res) => {
-      const paymentInfo = req.body;
-      const quantity = parseInt(paymentInfo.quantity);
-      const amount = paymentInfo.productPrice * 100;
+  try {
+    const paymentInfo = req.body;
 
-      const session = await stripe.checkout.sessions.create({
-        line_items: [
-          {
-            price_data: {
-              currency: "usd",
-              unit_amount: amount,
-              product_data: {
-                name: paymentInfo.productTitle,
-              },
+    // Validation
+    if (!paymentInfo.productPrice || !paymentInfo.quantity || !paymentInfo.buyerEmail) {
+      return res.status(400).send({ error: "Missing required payment fields" });
+    }
+
+    const quantity = parseInt(paymentInfo.quantity, 10);
+    const amount = parseFloat(paymentInfo.productPrice) * 100; // cents for Stripe
+
+    const session = await stripe.checkout.sessions.create({
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            unit_amount: amount,
+            product_data: {
+              name: paymentInfo.productTitle || "Product",
             },
-            quantity: quantity,
           },
-        ],
-        customer_email: paymentInfo?.buyerEmail,
-        mode: "payment",
-        metadata: {
-          productId: paymentInfo.productId,
-          orderId: paymentInfo.orderId,
+          quantity: quantity,
         },
-        success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled?session_id={CHECKOUT_SESSION_ID}&orderId=${paymentInfo.orderId}`,
-      });
-
-      res.send({ url: session.url });
+      ],
+      customer_email: paymentInfo.buyerEmail,
+      mode: "payment",
+      metadata: {
+        productId: paymentInfo.productId,
+        orderId: paymentInfo.orderId,
+      },
+      success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled?session_id={CHECKOUT_SESSION_ID}&orderId=${paymentInfo.orderId}`,
     });
+
+    res.send({ url: session.url });
+  } catch (err) {
+    console.error("Stripe error:", err);
+    res.status(500).send({ error: "Stripe session creation failed" });
+  }
+});
+//--------------
+
 
     app.get("/verify-payment", async (req, res) => {
       const sessionId = req.query.session_id;
