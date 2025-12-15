@@ -293,7 +293,7 @@ async function run() {
     });
 
     // Orders related APIs
-// ----------------
+
     app.get("/orders", verifyFBToken, async (req, res) => {
       const sellerEmail = req.query.sellerEmail;
       const email = req.query.email;
@@ -311,27 +311,15 @@ async function run() {
       const result = await curson.toArray();
       res.send(result);
     });
+// ----------------
+    app.get("/orders/:orderId", async (req, res) => {
+      const id = req.params.orderId;
+      const query = { _id: new ObjectId(id) };
+      const result = await ordersCollection.findOne(query);
+      res.send(result);
+    });
 
     
-
-    app.post("/orders", async (req, res) => {
-      const order = req.body;
-      order.paymentStatus = "Pending";
-      order.status = "Pending";
-      order.transactionId = null;
-      order.trackingId = null;
-      order.orderDate = new Date();
-      order.trackingHistory = [
-        {
-          entryDate: order.orderDate,
-          orderStatus: "Order Placed",
-        },
-      ];
-
-      const result = await ordersCollection.insertOne(order);
-
-      res.send({ insertedId: result.insertedId });
-    });
 
     app.patch("/orders/:id", async (req, res) => {
       const id = req.params.id;
