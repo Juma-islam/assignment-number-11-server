@@ -338,7 +338,7 @@ async function run() {
 
       res.send({ insertedId: result.insertedId });
     });
-// --------------
+
     app.patch("/orders/:id", async (req, res) => {
       const id = req.params.id;
       const { status, location, note } = req.body;
@@ -446,7 +446,18 @@ async function run() {
       res.send(result);
     });
 
-   
+   // --------
+    app.delete("/orders/:id/my-order", async (req, res) => {
+      const orderId = req.params.id;
+      const query = { _id: new ObjectId(orderId) };
+      const result = await ordersCollection.deleteOne(query);
+
+      if (result.deletedCount > 0) {
+        return res.send({ success: true, message: "Pending order deleted" });
+      }
+
+      res.send({ success: false, message: "Order not found or cannot delete" });
+    });
 
     app.delete("/orders/:id", async (req, res) => {
       const orderId = req.params.id;
@@ -471,36 +482,7 @@ async function run() {
 
     // Payment related APIs
 
-    app.post("/create-checkout-session", async (req, res) => {
-      const paymentInfo = req.body;
-      const quantity = parseInt(paymentInfo.quantity);
-      const amount = paymentInfo.productPrice * 100;
-
-      const session = await stripe.checkout.sessions.create({
-        line_items: [
-          {
-            price_data: {
-              currency: "usd",
-              unit_amount: amount,
-              product_data: {
-                name: paymentInfo.productTitle,
-              },
-            },
-            quantity: quantity,
-          },
-        ],
-        customer_email: paymentInfo?.buyerEmail,
-        mode: "payment",
-        metadata: {
-          productId: paymentInfo.productId,
-          orderId: paymentInfo.orderId,
-        },
-        success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled?session_id={CHECKOUT_SESSION_ID}&orderId=${paymentInfo.orderId}`,
-      });
-
-      res.send({ url: session.url });
-    });
+ 
 
     app.get("/verify-payment", async (req, res) => {
       const sessionId = req.query.session_id;
