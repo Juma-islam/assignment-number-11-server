@@ -293,23 +293,76 @@ async function run() {
 
     // Orders related APIs
 
-    app.get("/orders", verifyFBToken, async (req, res) => {
-      const sellerEmail = req.query.sellerEmail;
-      const email = req.query.email;
-      const query = {};
-      if (email) {
-        query.buyerEmail = email;
-        if (email !== req?.decoded_email) {
-          return res.status(403).send({ message: "forbidden access!" });
+    // app.get("/orders", verifyFBToken, async (req, res) => {
+    //   const sellerEmail = req.query.sellerEmail;
+    //   const email = req.query.email;
+    //   const query = {};
+    //   if (email) {
+    //     query.buyerEmail = email;
+    //     if (email !== req?.decoded_email) {
+    //       return res.status(403).send({ message: "forbidden access!" });
+    //     }
+    //   }
+    //   if (sellerEmail) {
+    //     query.sellerEmail = sellerEmail;
+    //   }
+    //   const curson = ordersCollection.find(query);
+    //   const result = await curson.toArray();
+    //   res.send(result);
+    // });
+
+    //=========================
+    // chatgpt theke ana
+app.get("/orders", verifyFBToken, async (req, res) => {
+  try {
+    const email = req.query.email; // buyer email
+    const query = {};
+
+    if (email) {
+      query.buyerEmail = email;
+
+      // শুধুমাত্র নিজের অর্ডার দেখার জন্য যাচাই
+      if (email !== req.decoded_email) {
+        return res.status(403).send({ message: "forbidden access!" });
+      }
+    }
+
+    const orders = await ordersCollection.find(query).toArray();
+
+    // প্রতিটি order এর সাথে product info যোগ করা
+    const ordersWithProductInfo = await Promise.all(
+      orders.map(async (order) => {
+        let productTitle = "";
+        let paymentMethod = "";
+
+        if (order.productId) {
+          // productId ObjectId হিসেবে ধরছি
+          const productQuery = {
+            $or: [{ _id: order.productId }, { _id: new ObjectId(order.productId) }],
+          };
+          const product = await productsCollection.findOne(productQuery);
+          if (product) {
+            productTitle = product.title || "";
+            paymentMethod = product.paymentOptions || "";
+          }
         }
-      }
-      if (sellerEmail) {
-        query.sellerEmail = sellerEmail;
-      }
-      const curson = ordersCollection.find(query);
-      const result = await curson.toArray();
-      res.send(result);
-    });
+
+        return {
+          ...order,
+          productTitle,
+          paymentMethod,
+        };
+      })
+    );
+
+    res.send(ordersWithProductInfo);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ message: "Server error while fetching orders" });
+  }
+});
+
+    //=====================
 
 
     app.get("/orders/:orderId", async (req, res) => {
@@ -512,74 +565,254 @@ async function run() {
 
 
     //-----------------
-    app.post("/create-checkout-session", async (req, res) => {
-  try {
-    const paymentInfo = req.body;
+    //ata vlo chilo, khaj korchilo, kintu noton code dice chatgpt, tai ata comment
+//     app.post("/create-checkout-session", async (req, res) => {
+//   try {
+//     const paymentInfo = req.body;
 
-    // Validation
-    if (!paymentInfo.productPrice || !paymentInfo.quantity || !paymentInfo.buyerEmail) {
-      return res.status(400).send({ error: "Missing required payment fields" });
-    }
+//     // Validation
+//     if (!paymentInfo.productPrice || !paymentInfo.quantity || !paymentInfo.buyerEmail) {
+//       return res.status(400).send({ error: "Missing required payment fields" });
+//     }
 
-    const quantity = parseInt(paymentInfo.quantity, 10);
-    const amount = parseFloat(paymentInfo.productPrice) * 100; // cents for Stripe
+//     const quantity = parseInt(paymentInfo.quantity, 10);
+//     const amount = parseFloat(paymentInfo.productPrice) * 100; // cents for Stripe
 
-    const session = await stripe.checkout.sessions.create({
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            unit_amount: amount,
-            product_data: {
-              name: paymentInfo.productTitle || "Product",
-            },
-          },
-          quantity: quantity,
-        },
-      ],
-      customer_email: paymentInfo.buyerEmail,
-      mode: "payment",
-      metadata: {
-        productId: paymentInfo.productId,
-        orderId: paymentInfo.orderId,
-      },
-      success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled?session_id={CHECKOUT_SESSION_ID}&orderId=${paymentInfo.orderId}`,
-    });
+//     const session = await stripe.checkout.sessions.create({
+//       line_items: [
+//         {
+//           price_data: {
+//             currency: "usd",
+//             unit_amount: amount,
+//             product_data: {
+//               name: paymentInfo.productTitle || "Product",
+//             },
+//           },
+//           quantity: quantity,
+//         },
+//       ],
+//       customer_email: paymentInfo.buyerEmail,
+//       mode: "payment",
+//       metadata: {
+//         productId: paymentInfo.productId,
+//         orderId: paymentInfo.orderId,
+//       },
+//       success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+//       cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled?session_id={CHECKOUT_SESSION_ID}&orderId=${paymentInfo.orderId}`,
+//     });
 
-    res.send({ url: session.url });
-  } catch (err) {
-    console.error("Stripe error:", err);
-    res.status(500).send({ error: "Stripe session creation failed" });
-  }
-});
+//     res.send({ url: session.url });
+//   } catch (err) {
+//     console.error("Stripe error:", err);
+//     res.status(500).send({ error: "Stripe session creation failed" });
+//   }
+// });
 //--------------
 
 
-    app.get("/verify-payment", async (req, res) => {
-      const sessionId = req.query.session_id;
+    // app.get("/verify-payment", async (req, res) => {
+    //   const sessionId = req.query.session_id;
 
-      const session = await stripe.checkout.sessions.retrieve(sessionId);
+    //   const session = await stripe.checkout.sessions.retrieve(sessionId);
 
-      const orderId = session.metadata.orderId;
+    //   const orderId = session.metadata.orderId;
 
-      if (session.payment_status === "paid") {
-        await ordersCollection.updateOne(
-          { _id: new ObjectId(orderId) },
-          {
-            $set: {
-              paymentStatus: "Paid",
-              transactionId: session.payment_intent,
+    //   if (session.payment_status === "paid") {
+    //     await ordersCollection.updateOne(
+    //       { _id: new ObjectId(orderId) },
+    //       {
+    //         $set: {
+    //           paymentStatus: "Paid",
+    //           transactionId: session.payment_intent,
+    //         },
+    //       }
+    //     );
+
+    //     return res.send({ success: true });
+    //   }
+
+    //   res.send({ success: false });
+    // });
+
+    //-------------
+// app.get("/verify-payment", async (req, res) => {
+//   const sessionId = req.query.session_id;
+//   const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+//   const orderId = session.metadata.orderId;
+
+//   if (session.payment_status === "paid") {
+//     await ordersCollection.updateOne(
+//       { _id: new ObjectId(orderId) },
+//       {
+//         $set: {
+//           paymentStatus: "Paid",
+//           transactionId: session.payment_intent,
+//         },
+//       }
+//     );
+
+//     return res.send({ success: true, orderId }); // orderId return
+//   }
+
+//   res.send({ success: false });
+// });
+ // Verify Payment
+    // app.get("/verify-payment", async (req, res) => {
+    //   const sessionId = req.query.session_id;
+    //   try {
+    //     const session = await stripe.checkout.sessions.retrieve(sessionId);
+    //     const orderId = session.metadata.orderId;
+
+    //     if (session.payment_status === "paid") {
+    //       const trackingId = `TDO-${uuidv4().split("-")[0].toUpperCase()}`;
+
+    //       await ordersCollection.updateOne(
+    //         { _id: new ObjectId(orderId) },
+    //         {
+    //           $set: {
+    //             paymentStatus: "Paid",
+    //             transactionId: session.payment_intent,
+    //             trackingId: trackingId,
+    //             status: "Approved",
+    //             updatedAt: new Date(),
+    //           },
+    //           $push: {
+    //             trackingHistory: {
+    //               entryDate: new Date(),
+    //               orderStatus: "Payment Successful, Order Approved",
+    //             },
+    //           },
+    //         }
+    //       );
+
+    //       return res.send({ success: true, orderId });
+    //     }
+
+    //     res.send({ success: false });
+    //   } catch (err) {
+    //     console.error(err);
+    //     res.status(500).send({ success: false, message: "Payment verification failed" });
+    //   }
+    // });
+     // Verify Payment
+     //-------ata khaj korchilo, kintu noton code dice chatgpt-tai ata comment
+//    app.get("/verify-payment", async (req, res) => {
+//   const sessionId = req.query.session_id;
+//   const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+//   const orderId = session.metadata.orderId;
+
+//   if (session.payment_status === "paid") {
+//     const trackingId = `TDO-${uuidv4().split("-")[0].toUpperCase()}`; // backend এ generate
+//     await ordersCollection.updateOne(
+//       { _id: new ObjectId(orderId) },
+//       {
+//         $set: {
+//           paymentStatus: "Paid",
+//           transactionId: session.payment_intent,
+//           trackingId: trackingId,
+//           status: "Approved",
+//           updatedAt: new Date(),
+//         },
+//         $push: {
+//           trackingHistory: {
+//             entryDate: new Date(),
+//             orderStatus: "Payment Successful, Order Approved",
+//           },
+//         },
+//       }
+//     );
+
+//     return res.send({ success: true, orderId });
+//   }
+
+//   res.send({ success: false });
+// });
+    //-----------
+//=========================
+      // Create Stripe Checkout session
+    app.post("/create-checkout-session", async (req, res) => {
+      try {
+        const { productId, quantity, productPrice, buyerEmail, productTitle, orderId } = req.body;
+
+        if (!productId || !quantity || !productPrice || !buyerEmail) {
+          return res.status(400).send({ error: "Missing required fields" });
+        }
+
+        const amount = parseFloat(productPrice) * 100; 
+
+        const session = await stripe.checkout.sessions.create({
+          payment_method_types: ["card"],
+          line_items: [
+            {
+              price_data: {
+                currency: "usd",
+                unit_amount: amount,
+                product_data: { name: productTitle || "Product" },
+              },
+              quantity: parseInt(quantity),
             },
-          }
-        );
+          ],
+          mode: "payment",
+          customer_email: buyerEmail, 
+          success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled?orderId=${orderId}`,
+          metadata: {
+            productId,
+            orderId,
+          },
+        });
 
-        return res.send({ success: true });
+        res.send({ url: session.url });
+      } catch (err) {
+        console.error("Stripe error:", err);
+        res.status(500).send({ error: "Stripe session creation failed" });
       }
-
-      res.send({ success: false });
     });
 
+    // Verify payment and save transactionId & trackingId
+    app.get("/verify-payment", async (req, res) => {
+      const sessionId = req.query.session_id;
+      if (!sessionId) return res.status(400).send({ error: "No session_id provided" });
+
+      try {
+        const session = await stripe.checkout.sessions.retrieve(sessionId);
+        const orderId = session.metadata.orderId;
+
+        if (session.payment_status === "paid") {
+          const trackingId = `TDO-${uuidv4().split("-")[0].toUpperCase()}`;
+
+          await ordersCollection.updateOne(
+            { _id: new ObjectId(orderId) },
+            {
+              $set: {
+                paymentStatus: "Paid",
+                transactionId: session.payment_intent,
+                trackingId,
+                status: "Approved",
+                updatedAt: new Date(),
+              },
+              $push: {
+                trackingHistory: {
+                  entryDate: new Date(),
+                  orderStatus: "Payment Completed",
+                },
+              },
+            }
+          );
+
+          return res.send({ success: true });
+        }
+
+        res.send({ success: false });
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: "Payment verification failed" });
+      }
+    });
+
+//=========================
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
