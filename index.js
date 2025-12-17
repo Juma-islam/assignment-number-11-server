@@ -31,7 +31,7 @@ const verifyFBToken = async (req, res, next) => {
 // firebase admin
 const admin = require("firebase-admin");
 
-const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString('utf8')
+const decoded = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString("utf8");
 const serviceAccount = JSON.parse(decoded);
 
 admin.initializeApp({
@@ -50,7 +50,7 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    // await client.connect();
+    await client.connect();
 
     const db = client.db("garments-user");
     const productsCollection = db.collection("products");
@@ -200,7 +200,6 @@ async function run() {
       res.send(result);
     });
 
-    
     // Users Apis
     app.get("/users", verifyFBToken, async (req, res) => {
       const user = await usersCollection.findOne({ email: req.decoded_email });
@@ -294,55 +293,51 @@ async function run() {
 
     // Orders related APIs
 
-app.get("/orders", verifyFBToken, async (req, res) => {
-  try {
-    const email = req.query.email; 
-    const query = {};
+    app.get("/orders", verifyFBToken, async (req, res) => {
+      try {
+        const email = req.query.email;
+        const query = {};
 
-    if (email) {
-      query.buyerEmail = email;
+        if (email) {
+          query.buyerEmail = email;
 
-      if (email !== req.decoded_email) {
-        return res.status(403).send({ message: "forbidden access!" });
-      }
-    }
-
-    const orders = await ordersCollection.find(query).toArray();
-
-    const ordersWithProductInfo = await Promise.all(
-      orders.map(async (order) => {
-        let productTitle = "";
-        let paymentMethod = "";
-
-        if (order.productId) {
- 
-          const productQuery = {
-            $or: [{ _id: order.productId }, { _id: new ObjectId(order.productId) }],
-          };
-          const product = await productsCollection.findOne(productQuery);
-          if (product) {
-            productTitle = product.title || "";
-            paymentMethod = product.paymentOptions || "";
+          if (email !== req.decoded_email) {
+            return res.status(403).send({ message: "forbidden access!" });
           }
         }
 
-        return {
-          ...order,
-          productTitle,
-          paymentMethod,
-        };
-      })
-    );
+        const orders = await ordersCollection.find(query).toArray();
 
-    res.send(ordersWithProductInfo);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send({ message: "Server error while fetching orders" });
-  }
-});
+        const ordersWithProductInfo = await Promise.all(
+          orders.map(async (order) => {
+            let productTitle = "";
+            let paymentMethod = "";
 
-    //=====================
+            if (order.productId) {
+              const productQuery = {
+                $or: [{ _id: order.productId }, { _id: new ObjectId(order.productId) }],
+              };
+              const product = await productsCollection.findOne(productQuery);
+              if (product) {
+                productTitle = product.title || "";
+                paymentMethod = product.paymentOptions || "";
+              }
+            }
 
+            return {
+              ...order,
+              productTitle,
+              paymentMethod,
+            };
+          })
+        );
+
+        res.send(ordersWithProductInfo);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ message: "Server error while fetching orders" });
+      }
+    });
 
     app.get("/orders/:orderId", async (req, res) => {
       const id = req.params.orderId;
@@ -510,207 +505,8 @@ app.get("/orders", verifyFBToken, async (req, res) => {
       }
     });
 
-    // Payment related APIs
-    // app.post("/create-checkout-session", async (req, res) => {
-    //   const paymentInfo = req.body;
-    //   const quantity = parseInt(paymentInfo.quantity);
-    //   const amount = paymentInfo.productPrice * 100;
-
-    //   const session = await stripe.checkout.sessions.create({
-    //     line_items: [
-    //       {
-    //         price_data: {
-    //           currency: "usd",
-    //           unit_amount: amount,
-    //           product_data: {
-    //             name: paymentInfo.productTitle,
-    //           },
-    //         },
-    //         quantity: quantity,
-    //       },
-    //     ],
-    //     customer_email: paymentInfo?.buyerEmail,
-    //     mode: "payment",
-    //     metadata: {
-    //       productId: paymentInfo.productId,
-    //       orderId: paymentInfo.orderId,
-    //     },
-    //     success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-    //     cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled?session_id={CHECKOUT_SESSION_ID}&orderId=${paymentInfo.orderId}`,
-    //   });
-
-    //   res.send({ url: session.url });
-    // });
-
-
-    //-----------------
-    //ata vlo chilo, khaj korchilo, kintu noton code dice chatgpt, tai ata comment
-//     app.post("/create-checkout-session", async (req, res) => {
-//   try {
-//     const paymentInfo = req.body;
-
-//     // Validation
-//     if (!paymentInfo.productPrice || !paymentInfo.quantity || !paymentInfo.buyerEmail) {
-//       return res.status(400).send({ error: "Missing required payment fields" });
-//     }
-
-//     const quantity = parseInt(paymentInfo.quantity, 10);
-//     const amount = parseFloat(paymentInfo.productPrice) * 100; // cents for Stripe
-
-//     const session = await stripe.checkout.sessions.create({
-//       line_items: [
-//         {
-//           price_data: {
-//             currency: "usd",
-//             unit_amount: amount,
-//             product_data: {
-//               name: paymentInfo.productTitle || "Product",
-//             },
-//           },
-//           quantity: quantity,
-//         },
-//       ],
-//       customer_email: paymentInfo.buyerEmail,
-//       mode: "payment",
-//       metadata: {
-//         productId: paymentInfo.productId,
-//         orderId: paymentInfo.orderId,
-//       },
-//       success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-//       cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled?session_id={CHECKOUT_SESSION_ID}&orderId=${paymentInfo.orderId}`,
-//     });
-
-//     res.send({ url: session.url });
-//   } catch (err) {
-//     console.error("Stripe error:", err);
-//     res.status(500).send({ error: "Stripe session creation failed" });
-//   }
-// });
-//--------------
-
-
-    // app.get("/verify-payment", async (req, res) => {
-    //   const sessionId = req.query.session_id;
-
-    //   const session = await stripe.checkout.sessions.retrieve(sessionId);
-
-    //   const orderId = session.metadata.orderId;
-
-    //   if (session.payment_status === "paid") {
-    //     await ordersCollection.updateOne(
-    //       { _id: new ObjectId(orderId) },
-    //       {
-    //         $set: {
-    //           paymentStatus: "Paid",
-    //           transactionId: session.payment_intent,
-    //         },
-    //       }
-    //     );
-
-    //     return res.send({ success: true });
-    //   }
-
-    //   res.send({ success: false });
-    // });
-
-    //-------------
-// app.get("/verify-payment", async (req, res) => {
-//   const sessionId = req.query.session_id;
-//   const session = await stripe.checkout.sessions.retrieve(sessionId);
-
-//   const orderId = session.metadata.orderId;
-
-//   if (session.payment_status === "paid") {
-//     await ordersCollection.updateOne(
-//       { _id: new ObjectId(orderId) },
-//       {
-//         $set: {
-//           paymentStatus: "Paid",
-//           transactionId: session.payment_intent,
-//         },
-//       }
-//     );
-
-//     return res.send({ success: true, orderId }); // orderId return
-//   }
-
-//   res.send({ success: false });
-// });
- // Verify Payment
-    // app.get("/verify-payment", async (req, res) => {
-    //   const sessionId = req.query.session_id;
-    //   try {
-    //     const session = await stripe.checkout.sessions.retrieve(sessionId);
-    //     const orderId = session.metadata.orderId;
-
-    //     if (session.payment_status === "paid") {
-    //       const trackingId = `TDO-${uuidv4().split("-")[0].toUpperCase()}`;
-
-    //       await ordersCollection.updateOne(
-    //         { _id: new ObjectId(orderId) },
-    //         {
-    //           $set: {
-    //             paymentStatus: "Paid",
-    //             transactionId: session.payment_intent,
-    //             trackingId: trackingId,
-    //             status: "Approved",
-    //             updatedAt: new Date(),
-    //           },
-    //           $push: {
-    //             trackingHistory: {
-    //               entryDate: new Date(),
-    //               orderStatus: "Payment Successful, Order Approved",
-    //             },
-    //           },
-    //         }
-    //       );
-
-    //       return res.send({ success: true, orderId });
-    //     }
-
-    //     res.send({ success: false });
-    //   } catch (err) {
-    //     console.error(err);
-    //     res.status(500).send({ success: false, message: "Payment verification failed" });
-    //   }
-    // });
-     // Verify Payment
-     //-------ata khaj korchilo, kintu noton code dice chatgpt-tai ata comment
-//    app.get("/verify-payment", async (req, res) => {
-//   const sessionId = req.query.session_id;
-//   const session = await stripe.checkout.sessions.retrieve(sessionId);
-
-//   const orderId = session.metadata.orderId;
-
-//   if (session.payment_status === "paid") {
-//     const trackingId = `TDO-${uuidv4().split("-")[0].toUpperCase()}`; // backend এ generate
-//     await ordersCollection.updateOne(
-//       { _id: new ObjectId(orderId) },
-//       {
-//         $set: {
-//           paymentStatus: "Paid",
-//           transactionId: session.payment_intent,
-//           trackingId: trackingId,
-//           status: "Approved",
-//           updatedAt: new Date(),
-//         },
-//         $push: {
-//           trackingHistory: {
-//             entryDate: new Date(),
-//             orderStatus: "Payment Successful, Order Approved",
-//           },
-//         },
-//       }
-//     );
-
-//     return res.send({ success: true, orderId });
-//   }
-
-//   res.send({ success: false });
-// });
-    //-----------
-//=========================
-      // Create Stripe Checkout session
+    //payment related apis
+    // Create Stripe Checkout session
     app.post("/create-checkout-session", async (req, res) => {
       try {
         const { productId, quantity, productPrice, buyerEmail, productTitle, orderId } = req.body;
@@ -719,7 +515,7 @@ app.get("/orders", verifyFBToken, async (req, res) => {
           return res.status(400).send({ error: "Missing required fields" });
         }
 
-        const amount = parseFloat(productPrice) * 100; 
+        const amount = parseFloat(productPrice) * 100;
 
         const session = await stripe.checkout.sessions.create({
           payment_method_types: ["card"],
@@ -734,7 +530,7 @@ app.get("/orders", verifyFBToken, async (req, res) => {
             },
           ],
           mode: "payment",
-          customer_email: buyerEmail, 
+          customer_email: buyerEmail,
           success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
           cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled?orderId=${orderId}`,
           metadata: {
@@ -750,7 +546,7 @@ app.get("/orders", verifyFBToken, async (req, res) => {
       }
     });
 
-    // Verify payment 
+    // Verify payment
     app.get("/verify-payment", async (req, res) => {
       const sessionId = req.query.session_id;
       if (!sessionId) return res.status(400).send({ error: "No session_id provided" });
@@ -791,7 +587,6 @@ app.get("/orders", verifyFBToken, async (req, res) => {
       }
     });
 
-//=========================
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
