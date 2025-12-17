@@ -1,3 +1,4 @@
 node_modules
 .env
 garments-tracker-projects-firebase-adminsdk-fbsvc-270f245f6b.json
+.vercel

@@ -31,7 +31,8 @@ const verifyFBToken = async (req, res, next) => {
 // firebase admin
 const admin = require("firebase-admin");
 
-const serviceAccount = require("./garments-tracker-projects-firebase-adminsdk-fbsvc-270f245f6b.json");
+const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString('utf8')
+const serviceAccount = JSON.parse(decoded);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -49,7 +50,7 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
 
     const db = client.db("garments-user");
     const productsCollection = db.collection("products");
@@ -293,35 +294,14 @@ async function run() {
 
     // Orders related APIs
 
-    // app.get("/orders", verifyFBToken, async (req, res) => {
-    //   const sellerEmail = req.query.sellerEmail;
-    //   const email = req.query.email;
-    //   const query = {};
-    //   if (email) {
-    //     query.buyerEmail = email;
-    //     if (email !== req?.decoded_email) {
-    //       return res.status(403).send({ message: "forbidden access!" });
-    //     }
-    //   }
-    //   if (sellerEmail) {
-    //     query.sellerEmail = sellerEmail;
-    //   }
-    //   const curson = ordersCollection.find(query);
-    //   const result = await curson.toArray();
-    //   res.send(result);
-    // });
-
-    //=========================
-    // chatgpt theke ana
 app.get("/orders", verifyFBToken, async (req, res) => {
   try {
-    const email = req.query.email; // buyer email
+    const email = req.query.email; 
     const query = {};
 
     if (email) {
       query.buyerEmail = email;
 
-      // শুধুমাত্র নিজের অর্ডার দেখার জন্য যাচাই
       if (email !== req.decoded_email) {
         return res.status(403).send({ message: "forbidden access!" });
       }
@@ -329,14 +309,13 @@ app.get("/orders", verifyFBToken, async (req, res) => {
 
     const orders = await ordersCollection.find(query).toArray();
 
-    // প্রতিটি order এর সাথে product info যোগ করা
     const ordersWithProductInfo = await Promise.all(
       orders.map(async (order) => {
         let productTitle = "";
         let paymentMethod = "";
 
         if (order.productId) {
-          // productId ObjectId হিসেবে ধরছি
+ 
           const productQuery = {
             $or: [{ _id: order.productId }, { _id: new ObjectId(order.productId) }],
           };
@@ -771,7 +750,7 @@ app.get("/orders", verifyFBToken, async (req, res) => {
       }
     });
 
-    // Verify payment and save transactionId & trackingId
+    // Verify payment 
     app.get("/verify-payment", async (req, res) => {
       const sessionId = req.query.session_id;
       if (!sessionId) return res.status(400).send({ error: "No session_id provided" });
