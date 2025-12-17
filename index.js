@@ -5,7 +5,7 @@ const app = express();
 const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
-const { v4: uuidv4 } = require("uuid");
+
 
 app.use(cors());
 app.use(express.json());
@@ -50,7 +50,7 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
 
     const db = client.db("garments-user");
     const productsCollection = db.collection("products");
@@ -556,7 +556,7 @@ async function run() {
         const orderId = session.metadata.orderId;
 
         if (session.payment_status === "paid") {
-          const trackingId = `TDO-${uuidv4().split("-")[0].toUpperCase()}`;
+          const trackingId = `TDO-${sessionId}`;
 
           await ordersCollection.updateOne(
             { _id: new ObjectId(orderId) },
@@ -587,8 +587,8 @@ async function run() {
       }
     });
 
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    // await client.db("admin").command({ ping: 1 });
+    // console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // await client.close();
   }
