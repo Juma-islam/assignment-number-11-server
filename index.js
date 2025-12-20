@@ -541,7 +541,7 @@ app.patch("/orders/:id", async (req, res) => {
         const session = await stripe.checkout.sessions.retrieve(sessionId);
         const orderId = session.metadata.orderId;
         if (session.payment_status === "paid") {
-          const trackingId = `TDO-${sessionId}`;
+          const trackingId = `GT-${sessionId}`;
           await ordersCollection.updateOne(
             { _id: new ObjectId(orderId) },
             {
