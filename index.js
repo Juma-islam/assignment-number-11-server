@@ -349,92 +349,119 @@ async function run() {
 
 
 // orders patch apis
-    app.patch("/orders/:id", async (req, res) => {
-      const id = req.params.id;
-      const { status, location, note } = req.body;
-      const query = { _id: new ObjectId(id) };
-      const generateTrackingId = () => {
-        const trackingBase = uuidv4().split("-")[0];
-        return `GT-${trackingBase.toUpperCase()}`;
+app.patch("/orders/:id", async (req, res) => {
+  const id = req.params.id;
+  const { status, location, note } = req.body;
+
+
+  let query;
+  try {
+    query = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id };
+  } catch (err) {
+    return res.status(400).send({ message: "Invalid Order ID format" });
+  }
+
+  const generateTrackingId = () => {
+    const timestamp = Date.now().toString(36); 
+    const random = Math.random().toString(36).substring(2, 8); 
+    return `GT-${timestamp}-${random}`.toUpperCase(); 
+  };
+
+
+  const newTrackingEntry = {
+    entryDate: new Date(),
+    orderStatus: status || "Updated",
+    location: location || "",
+    note: note || "",
+  };
+
+  try {
+   
+    if (status === "Delivered") {
+      const updatedDoc = {
+        $push: { trackingHistory: newTrackingEntry },
+        $set: { status: "Delivered", updatedAt: new Date() },
       };
-      const newTrackingEntry = {
-        entryDate: new Date(),
-        orderStatus: status,
-        location: location || "",
-        note: note || "",
+      const result = await ordersCollection.updateOne(query, updatedDoc);
+      return res.send({ modifiedCount: result.modifiedCount });
+    }
+
+
+    if (status === "Approved") {
+      const order = await ordersCollection.findOne(query);
+      if (!order) {
+        return res.status(404).send({ message: "Order not found" });
+      }
+
+      const productQuery = order.productId
+        ? ObjectId.isValid(order.productId)
+          ? { _id: new ObjectId(order.productId) }
+          : { _id: order.productId }
+        : null;
+
+      if (!productQuery) {
+        return res.status(404).send({ message: "Product ID missing in order" });
+      }
+
+      const product = await productsCollection.findOne(productQuery);
+      if (!product) {
+        return res.status(404).send({ message: "Product not found" });
+      }
+
+      const orderQuantity = parseInt(order.quantity);
+      const currentAvailableQuantity = parseInt(product.availableQuantity);
+
+      if (currentAvailableQuantity < orderQuantity) {
+        return res.status(400).send({
+          message: `Insufficient stock. Available: ${currentAvailableQuantity}, Ordered: ${orderQuantity}`,
+        });
+      }
+
+      await productsCollection.updateOne(productQuery, {
+        $set: {
+          availableQuantity: currentAvailableQuantity - orderQuantity,
+          updatedAt: new Date(),
+        },
+      });
+
+      const orderUpdatedDoc = {
+        $push: { trackingHistory: newTrackingEntry },
+        $set: {
+          status: "Approved",
+          updatedAt: new Date(),
+          trackingId: generateTrackingId(),
+        },
       };
-      if (status === "Delivered") {
-        const updatedDoc = {
-          $push: { trackingHistory: newTrackingEntry },
-          $set: {
-            status: status,
-            updatedAt: new Date(),
-          },
-        };
-        const result = await ordersCollection.updateOne(query, updatedDoc);
-        return res.send(result);
-      }
-      if (status === "Approved") {
-        const order = await ordersCollection.findOne(query);
-        if (!order) {
-          return res.status(404).send({ message: "Order not found" });
-        }
-        const productQuery = {
-          $or: [{ _id: order.productId }, { _id: new ObjectId(order.productId) }],
-        };
-        const product = await productsCollection.findOne(productQuery);
-        if (!product) {
-          return res.status(404).send({ message: "Product not found" });
-        }
-        const orderQuantity = parseInt(order.quantity);
-        const currentAvailableQuantity = parseInt(product.availableQuantity);
-        if (currentAvailableQuantity < orderQuantity) {
-          return res.status(400).send({
-            message: `Insufficient stock. Available: ${currentAvailableQuantity}, Ordered: ${orderQuantity}`,
-          });
-        }
-        const newAvailableQuantity = currentAvailableQuantity - orderQuantity;
-        const productUpdateResult = await productsCollection.updateOne(productQuery, {
-          $set: {
-            availableQuantity: newAvailableQuantity,
-            updatedAt: new Date(),
-          },
-        });
-        const orderUpdatedDoc = {
-          $push: { trackingHistory: newTrackingEntry },
-          $set: {
-            status: status,
-            updatedAt: new Date(),
-            trackingId: generateTrackingId(),
-          },
-        };
-        const orderUpdateResult = await ordersCollection.updateOne(query, orderUpdatedDoc);
-        res.send({
-          ...orderUpdateResult,
-          productUpdated: productUpdateResult.modifiedCount > 0,
-        });
-      }
-      if (status === "Rejected") {
-        const updatedDoc = {
-          $push: { trackingHistory: newTrackingEntry },
-          $set: {
-            status: status,
-            updatedAt: new Date(),
-            trackingId: null,
-          },
-        };
-        const result = await ordersCollection.updateOne(query, updatedDoc);
-        return res.send(result);
-      }
+
+      const result = await ordersCollection.updateOne(query, orderUpdatedDoc);
+      return res.send({ modifiedCount: result.modifiedCount, productUpdated: true });
+    }
+   
+    if (status === "Rejected") {
       const updatedDoc = {
         $push: { trackingHistory: newTrackingEntry },
         $set: {
+          status: "Rejected",
           updatedAt: new Date(),
+          trackingId: null, 
         },
       };
       const result = await ordersCollection.updateOne(query, updatedDoc);
-      res.send(result);
-    });
+      return res.send({ modifiedCount: result.modifiedCount });
+    }
+
+    const updatedDoc = {
+      $push: { trackingHistory: newTrackingEntry },
+      $set: { updatedAt: new Date() },
+    };
+    const result = await ordersCollection.updateOne(query, updatedDoc);
+    res.send({ modifiedCount: result.modifiedCount });
+
+  } catch (error) {
+    console.error("Error in PATCH /orders/:id:", error);
+    res.status(500).send({ message: "Server error during order update", error: error.message });
+  }
+});
 
 
     // delete orders/myOrders
